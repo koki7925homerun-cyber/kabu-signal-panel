@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>株シグナルくん</title>
+<style>
+ body{font-family:-apple-system,"Hiragino Sans",sans-serif;max-width:480px;margin:0 auto;
+      padding:16px;background:#f4f5f7;color:#1f2937}
+ h1{font-size:1.25rem;margin:8px 0 4px}
+ .sub{color:#6b7280;font-size:.85rem;margin:0 0 8px}
+ button{display:block;width:100%;padding:15px;margin:10px 0;font-size:1rem;border:0;
+        border-radius:12px;background:#2563eb;color:#fff;font-weight:600}
+ button:active{opacity:.8}
+ button.green{background:#059669} button.gray{background:#64748b}
+ input{width:100%;padding:12px;font-size:1rem;border:1px solid #d1d5db;border-radius:10px;
+       box-sizing:border-box;margin-top:8px}
+ pre{background:#fff;border-radius:12px;padding:12px;white-space:pre-wrap;font-size:.82rem;
+     border:1px solid #e5e7eb;max-height:60vh;overflow:auto}
+ .card{background:#fff;border-radius:14px;padding:14px;margin:12px 0;border:1px solid #e5e7eb}
+ .muted{color:#6b7280;font-size:.85rem}
+ ul{list-style:none;padding:0;margin:8px 0}
+ li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;
+    border-bottom:1px solid #f1f5f9}
+ li button{width:auto;padding:7px 12px;margin:0;background:#dc2626;font-size:.85rem}
+ a{color:#2563eb}
+ #status{font-size:.9rem;margin-top:4px;min-height:1.2em}
+</style></head><body>
+<h1>📊 株シグナルくん</h1>
+<p class="sub">スマホ操作パネル</p>
+
+<div id="setup" class="card" style="display:none">
+  <p><b>初回設定(この端末で1回だけ)</b><br>
+  GitHubのキー(ghp_...)を貼り付けてください。<br>
+  セットアップ時に使ったものと同じでOKです。<br>
+  <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=kabu-signal" target="_blank">手元にない場合はここから新しく作る</a>
+  (緑のGenerateボタンを押してコピー)</p>
+  <input id="token" placeholder="ghp_...">
+  <button onclick="saveToken()">保存してはじめる</button>
+  <p class="muted">キーはこの端末のブラウザの中にだけ保存されます。他人と共有しないでください。</p>
+</div>
+
+<div id="main" style="display:none">
+  <div class="card">
+    <button onclick="runScan('prime')">🔍 今すぐ全銘柄スキャン(約15分)</button>
+    <button class="green" onclick="runScan('watchlist')">⭐ お気に入りだけスキャン(数分)</button>
+    <div id="status" class="muted"></div>
+  </div>
+  <div class="card">
+    <button class="gray" onclick="showReport()">📋 最新レポートを見る</button>
+    <pre id="report" style="display:none"></pre>
+  </div>
+  <div class="card">
+    <b>⭐ お気に入り銘柄</b>
+    <ul id="wl"><li class="muted">読み込み中...</li></ul>
+    <input id="newcode" placeholder="証券コード(例: 7203)">
+    <input id="newname" placeholder="名前(例: トヨタ自動車)">
+    <button onclick="addStock()">追加する</button>
+  </div>
+  <div class="card muted">
+    <a href="#" id="actions" target="_blank">実行状況をGitHubで見る</a> ・
+    <a href="#" onclick="localStorage.removeItem('gh_token');location.reload();return false">キーを削除</a><br><br>
+    ※テクニカル指標と過去実績に基づく参考情報です。投資判断はご自身の責任で行ってください。
+  </div>
+</div>
+
+<script>
+const REPO='kabu-signal';
+let TOKEN=localStorage.getItem('gh_token'), OWNER=null, WLSHA=null;
+const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g,'')),c=>c.charCodeAt(0)));
+const enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+
+async function gh(method,path,body){
+  const r=await fetch('https://api.github.com'+path,{method,
+    headers:{Authorization:'Bearer '+TOKEN,Accept:'application/vnd.github+json'},
+    body:body?JSON.stringify(body):undefined});
+  if(!r.ok&&r.status!==404)throw new Error('通信エラー('+r.status+')');
+  return r;
+}
+function saveToken(){
+  const t=document.getElementById('token').value.trim();
+  if(t){localStorage.setItem('gh_token',t);location.reload();}
+}
+async function runScan(mode){
+  const st=document.getElementById('status');
+  st.textContent='開始しています...';
+  try{
+    await gh('POST','/repos/'+OWNER+'/'+REPO+'/actions/workflows/daily.yml/dispatches',
+             {ref:'main',inputs:{mode:mode}});
+    st.textContent='✅ スキャンを開始しました!終わるとDiscordに通知が届きます('
+      +(mode==='prime'?'約15分':'数分')+')。';
+  }catch(e){st.textContent='❌ '+e.message;}
+}
+async function showReport(){
+  const el=document.getElementById('report');
+  el.style.display='block';el.textContent='読み込み中...';
+  try{
+    const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/reports/latest.txt');
+    if(r.status===404){el.textContent='まだレポートがありません。先にスキャンを実行してください。';return;}
+    el.textContent=dec((await r.json()).content);
+  }catch(e){el.textContent='❌ '+e.message;}
+}
+async function loadWL(){
+  const ul=document.getElementById('wl');
+  try{
+    const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/watchlist.json');
+    let list=[];
+    if(r.status!==404){const j=await r.json();WLSHA=j.sha;list=JSON.parse(dec(j.content));}
+    ul.innerHTML='';
+    if(!list.length)ul.innerHTML='<li class="muted">まだ登録がありません</li>';
+    list.forEach(function(s,i){
+      const li=document.createElement('li');
+      const sp=document.createElement('span');sp.textContent=s[1]+'('+s[0]+')';
+      const b=document.createElement('button');b.textContent='削除';
+      b.onclick=function(){if(confirm(s[1]+' を削除しますか?'))saveWL(list.filter((_,j)=>j!==i));};
+      li.appendChild(sp);li.appendChild(b);ul.appendChild(li);
+    });
+  }catch(e){ul.innerHTML='<li class="muted">読み込みエラー: '+e.message+'</li>';}
+}
+async function saveWL(list){
+  const body={message:'お気に入り更新(スマホから)',content:enc(JSON.stringify(list,null,1))};
+  if(WLSHA)body.sha=WLSHA;
+  await gh('PUT','/repos/'+OWNER+'/'+REPO+'/contents/watchlist.json',body);
+  await loadWL();
+}
+async function addStock(){
+  const c=document.getElementById('newcode').value.trim().toUpperCase();
+  const n=document.getElementById('newname').value.trim();
+  if(!/^[0-9A-Z]{4}$/.test(c)){alert('証券コードは4桁で入力してください(例: 7203)');return;}
+  try{
+    const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/watchlist.json');
+    let list=[];
+    if(r.status!==404){const j=await r.json();WLSHA=j.sha;list=JSON.parse(dec(j.content));}
+    if(list.some(s=>s[0]===c)){alert('すでに登録されています');return;}
+    list.push([c,n||c]);
+    await saveWL(list);
+    document.getElementById('newcode').value='';
+    document.getElementById('newname').value='';
+  }catch(e){alert('保存に失敗しました: '+e.message+'\n少し待ってからもう一度お試しください。');}
+}
+async function init(){
+  if(!TOKEN){document.getElementById('setup').style.display='block';return;}
+  try{
+    const u=await(await gh('GET','/user')).json();OWNER=u.login;
+  }catch(e){
+    alert('キーが無効のようです。もう一度入力してください。');
+    localStorage.removeItem('gh_token');location.reload();return;
+  }
+  document.getElementById('actions').href='https://github.com/'+OWNER+'/'+REPO+'/actions';
+  document.getElementById('main').style.display='block';
+  loadWL();
+}
+init();
+</script></body></html>
