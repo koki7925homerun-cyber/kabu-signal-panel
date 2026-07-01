@@ -2,70 +2,258 @@
 <html lang="ja"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>株シグナルくん</title>
+<title>株シグナルくん — 市場計器盤</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
- body{font-family:-apple-system,"Hiragino Sans",sans-serif;max-width:480px;margin:0 auto;
-      padding:16px;background:#f4f5f7;color:#1f2937}
- h1{font-size:1.25rem;margin:8px 0 4px}
- .sub{color:#6b7280;font-size:.85rem;margin:0 0 8px}
- button{display:block;width:100%;padding:15px;margin:10px 0;font-size:1rem;border:0;
-        border-radius:12px;background:#2563eb;color:#fff;font-weight:600}
- button:active{opacity:.8}
- button.green{background:#059669} button.gray{background:#64748b}
- input{width:100%;padding:12px;font-size:1rem;border:1px solid #d1d5db;border-radius:10px;
-       box-sizing:border-box;margin-top:8px}
- pre{background:#fff;border-radius:12px;padding:12px;white-space:pre-wrap;font-size:.82rem;
-     border:1px solid #e5e7eb;max-height:60vh;overflow:auto}
- .card{background:#fff;border-radius:14px;padding:14px;margin:12px 0;border:1px solid #e5e7eb}
- .muted{color:#6b7280;font-size:.85rem}
- ul{list-style:none;padding:0;margin:8px 0}
- li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;
-    border-bottom:1px solid #f1f5f9}
- li button{width:auto;padding:7px 12px;margin:0;background:#dc2626;font-size:.85rem}
- a{color:#2563eb}
- #status{font-size:.9rem;margin-top:4px;min-height:1.2em}
-</style></head><body>
-<h1>📊 株シグナルくん</h1>
-<p class="sub">スマホ操作パネル</p>
+:root{
+  --bg:#0c1116; --surface:#141b23; --surface2:#1b2530; --line:#283340;
+  --text:#e8ecef; --muted:#8a96a3; --faint:#5a6675;
+  --brass:#d2974c; --brass-dim:#8a6a3c; --brass-glow:rgba(210,151,76,.18);
+  --pos:#5fae8a; --pos-dim:rgba(95,174,138,.15);
+  --neg:#d2674a; --neg-dim:rgba(210,103,74,.15);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+     font-family:"Zen Kaku Gothic New",-apple-system,"Hiragino Sans",sans-serif;
+     -webkit-font-smoothing:antialiased}
+.wrap{max-width:480px;margin:0 auto;padding:0 16px 48px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.serif{font-family:"Zen Old Mincho",serif}
 
-<div id="setup" class="card" style="display:none">
-  <p><b>初回設定(この端末で1回だけ)</b><br>
-  GitHubのキー(ghp_...)を貼り付けてください。<br>
-  セットアップ時に使ったものと同じでOKです。<br>
-  <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=kabu-signal" target="_blank">手元にない場合はここから新しく作る</a>
-  (緑のGenerateボタンを押してコピー)</p>
-  <input id="token" placeholder="ghp_...">
-  <button onclick="saveToken()">保存してはじめる</button>
-  <p class="muted">キーはこの端末のブラウザの中にだけ保存されます。他人と共有しないでください。</p>
-</div>
+/* ---- header ---- */
+header.top{padding:28px 0 18px;border-bottom:1px solid var(--line)}
+.brandrow{display:flex;align-items:center;gap:10px}
+.brandmark{width:30px;height:30px;flex:0 0 auto}
+.wordmark{font-family:"Zen Old Mincho",serif;font-weight:700;font-size:1.32rem;letter-spacing:.02em}
+.tagline{color:var(--muted);font-size:.78rem;margin:3px 0 0;letter-spacing:.04em}
+.datestamp{margin-top:14px;display:flex;justify-content:space-between;align-items:baseline}
+.datestamp .d{font-family:"JetBrains Mono";font-size:.78rem;color:var(--faint);letter-spacing:.03em}
 
-<div id="main" style="display:none">
-  <div class="card">
-    <button onclick="runScan('prime')">🔍 今すぐ全銘柄スキャン(約15分)</button>
-    <button class="green" onclick="runScan('watchlist')">⭐ お気に入りだけスキャン(数分)</button>
-    <div id="status" class="muted"></div>
+/* ---- regime strip ---- */
+.regime{margin-top:14px}
+.regime-label{display:flex;justify-content:space-between;font-size:.7rem;color:var(--faint);
+  font-family:"JetBrains Mono";letter-spacing:.05em;margin-bottom:6px;text-transform:uppercase}
+.regime-track{position:relative;height:6px;border-radius:3px;
+  background:linear-gradient(90deg,var(--neg-dim),var(--surface2) 48%,var(--surface2) 52%,var(--pos-dim));
+  border:1px solid var(--line)}
+.regime-mark{position:absolute;top:-4px;width:3px;height:14px;border-radius:2px;
+  background:var(--brass);box-shadow:0 0 8px var(--brass-glow);transition:left .6s cubic-bezier(.2,.8,.2,1)}
+.regime-words{display:flex;justify-content:space-between;font-size:.68rem;color:var(--faint);margin-top:5px}
+
+/* ---- sections ---- */
+.section{margin-top:26px}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.section-head h2{font-family:"Zen Old Mincho",serif;font-size:.98rem;font-weight:700;margin:0;
+  letter-spacing:.02em}
+.section-head .eyebrow{font-family:"JetBrains Mono";font-size:.64rem;color:var(--faint);
+  letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:2px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+      padding:16px}
+.card + .card{margin-top:10px}
+
+/* ---- buttons ---- */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+     padding:14px;border-radius:11px;border:1px solid var(--line);background:var(--surface2);
+     color:var(--text);font-size:.92rem;font-weight:500;font-family:inherit;cursor:pointer}
+.btn:active{transform:scale(.99)}
+.btn.primary{background:var(--brass);color:#1a1408;border-color:var(--brass);font-weight:700}
+.btn.ghost{background:transparent}
+.btn.danger-text{color:var(--neg);background:transparent;border:none;font-size:.78rem;padding:6px}
+.btn-row{display:flex;flex-direction:column;gap:9px}
+#status{font-size:.78rem;color:var(--muted);margin-top:10px;min-height:1.1em;text-align:center}
+
+/* ---- calibration gauge (signature element) ---- */
+.gauge{display:flex;flex-direction:column;align-items:center;flex:0 0 auto}
+.gauge svg{display:block}
+.gauge .readout{font-family:"JetBrains Mono";font-weight:700;margin-top:-6px}
+.gauge .glabel{font-size:.62rem;color:var(--faint);letter-spacing:.04em;margin-top:1px}
+
+/* ---- validation card ---- */
+.verdict{display:inline-block;font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:20px;
+  font-family:"JetBrains Mono";letter-spacing:.03em}
+.verdict.good{background:var(--pos-dim);color:var(--pos)}
+.verdict.mid{background:var(--brass-glow);color:var(--brass)}
+.verdict.weak{background:var(--neg-dim);color:var(--neg)}
+.oos-row{display:flex;justify-content:space-between;font-size:.8rem;padding:7px 0;
+  border-top:1px solid var(--line)}
+.oos-row .k{color:var(--muted)}
+.oos-row .v{font-family:"JetBrains Mono"}
+.note{color:var(--faint);font-size:.7rem;margin-top:8px;line-height:1.5}
+
+/* ---- tracking bars ---- */
+.hz-row{display:grid;grid-template-columns:42px 1fr 64px;align-items:center;gap:10px;
+  padding:7px 0;border-top:1px solid var(--line)}
+.hz-row:first-of-type{border-top:none}
+.hz-day{font-family:"JetBrains Mono";font-size:.74rem;color:var(--muted)}
+.hz-bar-bg{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.hz-bar-fill{height:100%;background:var(--brass);border-radius:3px}
+.hz-stat{font-family:"JetBrains Mono";font-size:.7rem;text-align:right;color:var(--text)}
+.hz-pending{color:var(--faint);font-size:.7rem;font-family:"JetBrains Mono"}
+
+/* ---- filter strip ---- */
+.filterbar{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px}
+.chip{flex:0 0 auto;font-size:.74rem;font-family:"JetBrains Mono";padding:6px 12px;
+  border-radius:20px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.chip.active{background:var(--brass);color:#1a1408;border-color:var(--brass);font-weight:700}
+
+/* ---- stock cards ---- */
+.stock{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+       margin-bottom:10px;overflow:hidden}
+.stock-head{display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer}
+.stock-info{flex:1;min-width:0}
+.stock-name{font-weight:700;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-code{font-family:"JetBrains Mono";font-size:.7rem;color:var(--faint)}
+.stock-price{font-family:"JetBrains Mono";font-size:.78rem;color:var(--muted);margin-top:2px}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:.64rem;padding:2px 7px;border-radius:5px;background:var(--surface2);color:var(--muted)}
+.chevron{color:var(--faint);transition:transform .25s}
+.stock.open .chevron{transform:rotate(180deg)}
+.stock-body{display:none;padding:0 14px 16px;border-top:1px solid var(--line)}
+.stock.open .stock-body{display:block}
+.bd-row{display:grid;grid-template-columns:88px 1fr 38px;align-items:center;gap:8px;
+  padding:5px 0;font-size:.74rem}
+.bd-item{color:var(--muted)}
+.bd-bar-bg{height:4px;background:var(--surface2);border-radius:2px}
+.bd-bar-fill{height:100%;background:var(--brass-dim);border-radius:2px}
+.bd-pt{font-family:"JetBrains Mono";text-align:right;color:var(--text)}
+.subhead{font-size:.68rem;color:var(--faint);font-family:"JetBrains Mono";letter-spacing:.05em;
+  text-transform:uppercase;margin:14px 0 6px}
+.kvline{font-size:.78rem;color:var(--text);line-height:1.7}
+.kvline .lbl{color:var(--muted)}
+.pillrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.pill{font-size:.68rem;padding:3px 8px;border-radius:6px}
+.pill.g{background:var(--pos-dim);color:var(--pos)}
+.pill.r{background:var(--neg-dim);color:var(--neg)}
+.pill.n{background:var(--surface2);color:var(--muted)}
+
+.rest-list{font-size:.78rem;color:var(--muted);line-height:2}
+.rest-list .sc{font-family:"JetBrains Mono";color:var(--brass)}
+
+/* ---- watchlist ---- */
+.wl-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+  border-top:1px solid var(--line);font-size:.85rem}
+.wl-item:first-child{border-top:none}
+.wl-item .code{font-family:"JetBrains Mono";color:var(--faint);font-size:.72rem}
+input.field{width:100%;padding:11px 13px;font-size:.88rem;background:var(--surface2);
+  color:var(--text);border:1px solid var(--line);border-radius:9px;margin-top:8px;font-family:inherit}
+input.field::placeholder{color:var(--faint)}
+
+footer.foot{margin-top:30px;padding-top:18px;border-top:1px solid var(--line)}
+.foot a{color:var(--brass);text-decoration:none;font-size:.76rem}
+.foot .disclaimer{color:var(--faint);font-size:.7rem;line-height:1.7;margin-top:10px}
+.linkrow{display:flex;gap:14px;flex-wrap:wrap}
+</style></head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brandrow">
+      <svg class="brandmark" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="14" stroke="#d2974c" stroke-width="1.4"/>
+        <path d="M16 16 L23 11" stroke="#d2974c" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="1.6" fill="#d2974c"/>
+        <path d="M6 16 a10 10 0 0 1 6.2 -9.2" stroke="#5fae8a" stroke-width="1.2" stroke-linecap="round" opacity=".55"/>
+      </svg>
+      <div>
+        <div class="wordmark">株シグナルくん</div>
+        <div class="tagline">市場計器盤 — 過去の傾向を測定する道具</div>
+      </div>
+    </div>
+  </header>
+
+  <div id="setup" class="card" style="display:none;margin-top:20px">
+    <div class="subhead">初期校正</div>
+    <p class="kvline">この端末からはじめて使う場合、GitHubのキー(ghp_...)を貼り付けてください。<br>
+    セットアップ時に使ったものと同じでOKです。</p>
+    <input id="token" class="field" placeholder="ghp_...">
+    <div style="height:10px"></div>
+    <button class="btn primary" onclick="saveToken()">校正してはじめる</button>
+    <p class="note">キーはこの端末のブラウザの中にだけ保存されます。他人と共有しないでください。
+    <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=kabu-signal" target="_blank">手元にない場合はここから新しく作る</a></p>
   </div>
-  <div class="card">
-    <button class="gray" onclick="showReport()">📋 最新レポートを見る</button>
-    <pre id="report" style="display:none"></pre>
-  </div>
-  <div class="card">
-    <b>⭐ お気に入り銘柄</b>
-    <ul id="wl"><li class="muted">読み込み中...</li></ul>
-    <input id="newcode" placeholder="証券コード(例: 7203)">
-    <input id="newname" placeholder="名前(例: トヨタ自動車)">
-    <button onclick="addStock()">追加する</button>
-  </div>
-  <div class="card muted">
-    <a href="#" id="actions" target="_blank">実行状況をGitHubで見る</a> ・
-    <a href="#" onclick="localStorage.removeItem('gh_token');location.reload();return false">キーを削除</a><br><br>
-    ※テクニカル指標と過去実績に基づく参考情報です。投資判断はご自身の責任で行ってください。
+
+  <div id="main" style="display:none">
+
+    <div class="section">
+      <div class="datestamp">
+        <span class="d" id="todaystr">——</span>
+      </div>
+      <div class="regime">
+        <div class="regime-label"><span>市場の地合い</span><span id="regimeval">—</span></div>
+        <div class="regime-track"><div class="regime-mark" id="regimemark" style="left:50%"></div></div>
+        <div class="regime-words"><span>向かい風</span><span>中立</span><span>追い風</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="btn-row">
+        <button class="btn primary" onclick="runScan('prime')">🔍 全銘柄スキャン(約15分)</button>
+        <button class="btn" onclick="runScan('watchlist')">⭐ お気に入りスキャン(数分)</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div class="section" id="oos-section" style="display:none">
+      <div class="section-head"><div><span class="eyebrow">Out-of-sample</span>
+        <h2>戦略の信頼性</h2></div></div>
+      <div class="card" id="oos-card"></div>
+    </div>
+
+    <div class="section" id="tr-section" style="display:none">
+      <div class="section-head"><div><span class="eyebrow">Track record</span>
+        <h2>実績トラッキング</h2></div></div>
+      <div class="card" id="tr-card"></div>
+    </div>
+
+    <div class="section" id="stocks-section" style="display:none">
+      <div class="section-head"><div><span class="eyebrow">Signal log</span>
+        <h2>買いサイン点灯銘柄</h2></div></div>
+      <div class="filterbar" id="filterbar"></div>
+      <div id="stocklist"></div>
+      <div id="restlist"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><div><span class="eyebrow">Report</span>
+        <h2>テキスト版レポート</h2></div></div>
+      <div class="card">
+        <button class="btn ghost" onclick="showReport()">全文を表示</button>
+        <pre id="report" class="mono" style="display:none;white-space:pre-wrap;font-size:.74rem;
+          color:var(--muted);margin-top:12px;max-height:50vh;overflow:auto"></pre>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><div><span class="eyebrow">Watchlist</span>
+        <h2>お気に入り銘柄</h2></div></div>
+      <div class="card">
+        <div id="wl"></div>
+        <input id="newcode" class="field" placeholder="証券コード(例: 7203)">
+        <input id="newname" class="field" placeholder="名前(例: トヨタ自動車)">
+        <div style="height:10px"></div>
+        <button class="btn" onclick="addStock()">追加する</button>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <div class="linkrow">
+        <a href="#" id="actions" target="_blank">実行状況をGitHubで見る</a>
+        <a href="#" onclick="localStorage.removeItem('gh_token');location.reload();return false">キーを削除</a>
+      </div>
+      <p class="disclaimer">この計器はテクニカル指標・財務指標・マクロ環境と過去実績に基づく
+      参考情報を表示するものであり、将来の株価を予知するものではありません。
+      投資判断はご自身の責任で行ってください。</p>
+    </footer>
   </div>
 </div>
 
 <script>
 const REPO='kabu-signal';
-let TOKEN=localStorage.getItem('gh_token'), OWNER=null, WLSHA=null;
+let TOKEN=localStorage.getItem('gh_token'), OWNER=null, WLSHA=null, REPORT_DATA=null;
 const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g,'')),c=>c.charCodeAt(0)));
 const enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 
@@ -80,41 +268,246 @@ function saveToken(){
   const t=document.getElementById('token').value.trim();
   if(t){localStorage.setItem('gh_token',t);location.reload();}
 }
+
+/* ---- gauge (calibration arc) ---- */
+function gaugeSVG(value, max, size, color){
+  // 半円ゲージ: -90deg(左端=0)から+90deg(右端=max)
+  size = size||72;
+  const r = size*0.42, cx=size/2, cy=size*0.56;
+  const pct = Math.max(0,Math.min(1, value/max));
+  const startAngle = Math.PI, endAngle = Math.PI*(1-pct);
+  const x1=cx+r*Math.cos(Math.PI), y1=cy+r*Math.sin(Math.PI);
+  const x2=cx+r*Math.cos(0), y2=cy+r*Math.sin(0);
+  const nx=cx+r*Math.cos(endAngle), ny=cy+r*Math.sin(endAngle);
+  const largeArc = pct>0.5?1:0;
+  return `<svg width="${size}" height="${size*0.62}" viewBox="0 0 ${size} ${size*0.62}">
+    <path d="M ${x1} ${y1} A ${r} ${r} 0 1 1 ${x2} ${y2}" stroke="#283340" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${nx} ${ny}" stroke="${color}" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="2" fill="${color}"/>
+  </svg>`;
+}
+function scoreColor(v){ return v>=70?'#5fae8a':v>=40?'#d2974c':'#d2674a'; }
+
+function gauge(value,max,label,size){
+  const c=scoreColor(max===100?value:(value/max*100));
+  return `<div class="gauge">${gaugeSVG(value,max,size,c)}
+    <div class="readout" style="color:${c};font-size:${size>60?'1.05rem':'.85rem'}">${value}</div>
+    <div class="glabel">${label}</div></div>`;
+}
+
 async function runScan(mode){
   const st=document.getElementById('status');
   st.textContent='開始しています...';
   try{
     await gh('POST','/repos/'+OWNER+'/'+REPO+'/actions/workflows/daily.yml/dispatches',
              {ref:'main',inputs:{mode:mode}});
-    st.textContent='✅ スキャンを開始しました!終わるとDiscordに通知が届きます('
+    st.textContent='スキャンを開始しました。終わるとDiscordに通知が届きます('
       +(mode==='prime'?'約15分':'数分')+')。';
-  }catch(e){st.textContent='❌ '+e.message;}
+  }catch(e){st.textContent='エラー: '+e.message;}
 }
 async function showReport(){
   const el=document.getElementById('report');
-  el.style.display='block';el.textContent='読み込み中...';
+  el.style.display = el.style.display==='block' ? 'none' : 'block';
+  if(el.style.display==='none' || el.textContent) return;
+  el.textContent='読み込み中...';
   try{
     const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/reports/latest.txt');
     if(r.status===404){el.textContent='まだレポートがありません。先にスキャンを実行してください。';return;}
     el.textContent=dec((await r.json()).content);
-  }catch(e){el.textContent='❌ '+e.message;}
+  }catch(e){el.textContent='エラー: '+e.message;}
 }
+
+function fmtPct(v){ return (v>0?'+':'')+v.toFixed(1)+'%'; }
+
+function renderRegime(macro){
+  if(!macro) return;
+  const s = macro.env_score; // -3..3
+  const pct = ((s+3)/6)*100;
+  document.getElementById('regimemark').style.left = pct+'%';
+  const words = {'-3':'強い向かい風','-2':'向かい風','-1':'やや向かい風','0':'中立','1':'やや追い風','2':'追い風','3':'強い追い風'};
+  document.getElementById('regimeval').textContent = words[String(s)]||'中立';
+}
+
+function renderOOS(oos){
+  const sec=document.getElementById('oos-section'), card=document.getElementById('oos-card');
+  if(!oos){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  const edge = oos.oos.edge;
+  const verdictClass = oos.holds && edge>=0.5 ? 'good' : oos.holds ? 'mid' : 'weak';
+  const verdictText = oos.holds && edge>=0.5 ? '◎ 選別力あり' : oos.holds ? '○ わずかに有効' : '△ 選別力は確認できず';
+  // ゲージ: edge を -3%〜+3% を 0〜100スケールに正規化
+  const gv = Math.round(Math.max(0,Math.min(100,(edge+3)/6*100)));
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px">
+      ${gauge(gv,100,'検証期間の超過',76)}
+      <div style="flex:1">
+        <span class="verdict ${verdictClass}">${verdictText}</span>
+        <p class="note" style="margin-top:8px">未知の期間でシグナルが単純保有を
+        ${edge>=0?'上回りました':'上回れませんでした'}(${fmtPct(edge)})</p>
+      </div>
+    </div>
+    <div class="oos-row"><span class="k">学習期間</span><span class="v">中央値${fmtPct(oos.is.med)} / 保有${fmtPct(oos.is.bench_med)} → 超過${fmtPct(oos.is.edge)}</span></div>
+    <div class="oos-row"><span class="k">検証期間</span><span class="v">中央値${fmtPct(oos.oos.med)} / 保有${fmtPct(oos.oos.bench_med)} → 超過${fmtPct(oos.oos.edge)}</span></div>
+    <p class="note">過去を時系列で前${oos.split_pct}%/後${100-oos.split_pct}%に分割し、後半を「未知の期間」として検証(外れ値は除外、中央値で比較)。</p>
+  `;
+}
+
+function renderTracking(tr){
+  const sec=document.getElementById('tr-section'), card=document.getElementById('tr-card');
+  if(!tr || tr.total===0){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  let html = `<p class="kvline">記録総数 <b class="mono">${tr.total}</b>件
+    (検証完了 ${tr.done} / 検証待ち ${tr.total-tr.done})</p>`;
+  if(tr.horizons.length){
+    html += tr.horizons.map(h=>{
+      if(!h.ready) return `<div class="hz-row"><span class="hz-day">${h.days}日</span>
+        <span class="hz-pending">データ蓄積中(${h.n}件)</span><span></span></div>`;
+      const w = Math.max(2,Math.min(100,h.win));
+      return `<div class="hz-row"><span class="hz-day">${h.days}日</span>
+        <div class="hz-bar-bg"><div class="hz-bar-fill" style="width:${w}%"></div></div>
+        <span class="hz-stat">勝率${h.win.toFixed(0)}%<br>${fmtPct(h.avg)}</span></div>`;
+    }).join('');
+  }
+  if(tr.bands && tr.bands.length){
+    html += `<div class="subhead">スコア帯別(20日後)</div>`;
+    html += tr.bands.map(b=>`<div class="hz-row"><span class="hz-day mono" style="font-size:.66rem">${b.label}</span>
+      <div class="hz-bar-bg"><div class="hz-bar-fill" style="width:${Math.max(2,b.win)}%"></div></div>
+      <span class="hz-stat">勝率${b.win.toFixed(0)}%<br>${fmtPct(b.avg)}</span></div>`).join('');
+  }
+  card.innerHTML = html;
+}
+
+let CURRENT_SORT='upside';
+function sortStocks(list){
+  const arr=[...list];
+  if(CURRENT_SORT==='upside') arr.sort((a,b)=>b.upside-a.upside);
+  else if(CURRENT_SORT==='signals') arr.sort((a,b)=>b.buys.length-a.buys.length);
+  else if(CURRENT_SORT==='rs') arr.sort((a,b)=>(b.rel_strength||-99)-(a.rel_strength||-99));
+  return arr;
+}
+
+function renderStockCard(s){
+  const breakdown = (s.breakdown||[]).map(b=>`
+    <div class="bd-row"><span class="bd-item">${b.item}</span>
+      <div class="bd-bar-bg"><div class="bd-bar-fill" style="width:${(b.pt/b.max*100)}%"></div></div>
+      <span class="bd-pt">${b.pt}/${b.max}</span></div>`).join('');
+  const tags = (s.buys||[]).slice(0,3).map(b=>`<span class="tag">${b}</span>`).join('');
+  let holdHtml='';
+  if(s.hold && s.hold.n>0){
+    holdHtml = `<div class="subhead">過去実績(サイン${s.hold.n}回後)</div>
+    <div class="pillrow">${s.hold.rows.map(r=>{
+      const [d,a,w]=r; const star = d===s.hold.best?'★':'';
+      const cls = a>0?'g':'r';
+      return `<span class="pill ${cls}">${d}日${fmtPct(a)}(勝${w.toFixed(0)}%)${star}</span>`;
+    }).join('')}</div>`;
+  }
+  let fundHtml='';
+  if(s.fund){
+    fundHtml = `<div class="subhead">割安度</div><p class="kvline">${s.fund.rating}<br>
+      <span style="color:var(--muted);font-size:.74rem">${s.fund.text}</span></p>`;
+  }
+  let valHtml='';
+  if(s.valuation){
+    const theo=(s.valuation.theo||[]).map(t=>`<span class="kvline">${t[0]} <b class="mono">${t[1].toLocaleString()}円</b></span>`).join('<br>');
+    let extra='';
+    if(s.valuation.analyst) extra+=`<div class="kvline" style="margin-top:6px"><span class="lbl">投資会社の姿勢</span> ${s.valuation.analyst.label}</div>`;
+    if(s.valuation.target) extra+=`<div class="kvline"><span class="lbl">目標株価</span> <b class="mono">${s.valuation.target.toLocaleString()}円</b> (${fmtPct(s.valuation.target_upside)})</div>`;
+    if(theo || extra) valHtml = `<div class="subhead">理論株価・アナリスト評価</div>${theo}${extra}`;
+  }
+  let extraHtml='';
+  if(s.extra && s.extra.items && s.extra.items.length){
+    const pills = s.extra.items.map(it=>{
+      const [cat,label,val,pt]=it; const cls = pt>0?'g':pt<0?'r':'n';
+      return `<span class="pill ${cls}">${label}${val}</span>`;
+    }).join('');
+    extraHtml = `<div class="subhead">業績・質・需給</div><div class="pillrow">${pills}</div>`;
+  }
+  let macroHtml='';
+  if(s.macro_fit && s.macro_fit.text){
+    macroHtml = `<div class="subhead">マクロ適合</div><p class="kvline" style="font-size:.74rem;color:var(--muted)">${s.macro_fit.text}</p>`;
+  }
+  let stopHtml = s.stop_pct!=null ? `<div class="kvline"><span class="lbl">損切り目安</span> 約 <b class="mono">-${s.stop_pct}%</b>(ATR×2)</div>` : '';
+  let rsHtml = s.rel_strength!=null ? `<div class="kvline"><span class="lbl">対TOPIX相対強さ</span> <b class="mono">${fmtPct(s.rel_strength)}</b></div>` : '';
+
+  const div = document.createElement('div');
+  div.className='stock';
+  div.innerHTML = `
+    <div class="stock-head" onclick="this.parentElement.classList.toggle('open')">
+      ${gauge(s.upside,100,'上昇余地',60)}
+      <div class="stock-info">
+        <div class="stock-name">${s.name}</div>
+        <div class="stock-code">${s.code}</div>
+        <div class="stock-price">終値 ${s.close.toLocaleString()}円</div>
+        <div class="tags">${tags}</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="stock-body">
+      <div class="subhead">スコア内訳</div>
+      ${breakdown}
+      ${holdHtml}${stopHtml}${rsHtml}${fundHtml}${valHtml}${extraHtml}${macroHtml}
+    </div>`;
+  return div;
+}
+
+function renderStocks(data){
+  const sec=document.getElementById('stocks-section');
+  const list=document.getElementById('stocklist'), rest=document.getElementById('restlist');
+  const bar=document.getElementById('filterbar');
+  if(!data.stocks || !data.stocks.length){
+    if(data.filter){
+      sec.style.display='block';
+      list.innerHTML=`<p class="note">サイン点灯${data.filter.before}銘柄中、全条件をクリアした銘柄はありませんでした。</p>`;
+      bar.innerHTML=''; rest.innerHTML='';
+    } else sec.style.display='none';
+    return;
+  }
+  sec.style.display='block';
+  bar.innerHTML = `
+    <button class="chip ${CURRENT_SORT==='upside'?'active':''}" onclick="CURRENT_SORT='upside';renderStocks(REPORT_DATA)">上昇余地順</button>
+    <button class="chip ${CURRENT_SORT==='signals'?'active':''}" onclick="CURRENT_SORT='signals';renderStocks(REPORT_DATA)">サイン数順</button>
+    <button class="chip ${CURRENT_SORT==='rs'?'active':''}" onclick="CURRENT_SORT='rs';renderStocks(REPORT_DATA)">対TOPIX強さ順</button>`;
+  list.innerHTML='';
+  sortStocks(data.stocks).forEach(s=>list.appendChild(renderStockCard(s)));
+  if(data.rest && data.rest.length){
+    rest.innerHTML = `<div class="subhead" style="margin-top:14px">その他の点灯銘柄</div>
+      <div class="rest-list">${data.rest.map(r=>`${r.name}(${r.code}) <span class="sc">${r.upside}</span>/100</div>`).join('')}</div>`;
+  } else rest.innerHTML='';
+}
+
+async function loadReport(){
+  try{
+    const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/reports/latest.json');
+    if(r.status===404) return;
+    const data=JSON.parse(dec((await r.json()).content));
+    REPORT_DATA=data;
+    document.getElementById('todaystr').textContent = data.date+'  '+data.label;
+    renderRegime(data.macro);
+    renderOOS(data.oos);
+    renderTracking(data.tracking);
+    renderStocks(data);
+  }catch(e){ console.error(e); }
+}
+
 async function loadWL(){
-  const ul=document.getElementById('wl');
+  const wl=document.getElementById('wl');
   try{
     const r=await gh('GET','/repos/'+OWNER+'/'+REPO+'/contents/watchlist.json');
     let list=[];
     if(r.status!==404){const j=await r.json();WLSHA=j.sha;list=JSON.parse(dec(j.content));}
-    ul.innerHTML='';
-    if(!list.length)ul.innerHTML='<li class="muted">まだ登録がありません</li>';
+    wl.innerHTML='';
+    if(!list.length){ wl.innerHTML='<p class="note">まだ登録がありません</p>'; return; }
     list.forEach(function(s,i){
-      const li=document.createElement('li');
-      const sp=document.createElement('span');sp.textContent=s[1]+'('+s[0]+')';
-      const b=document.createElement('button');b.textContent='削除';
+      const row=document.createElement('div');
+      row.className='wl-item';
+      row.innerHTML=`<span>${s[1]} <span class="code">${s[0]}</span></span>`;
+      const b=document.createElement('button');
+      b.className='btn danger-text'; b.textContent='削除';
+      b.style.width='auto';
       b.onclick=function(){if(confirm(s[1]+' を削除しますか?'))saveWL(list.filter((_,j)=>j!==i));};
-      li.appendChild(sp);li.appendChild(b);ul.appendChild(li);
+      row.appendChild(b); wl.appendChild(row);
     });
-  }catch(e){ul.innerHTML='<li class="muted">読み込みエラー: '+e.message+'</li>';}
+  }catch(e){wl.innerHTML='<p class="note">読み込みエラー: '+e.message+'</p>';}
 }
 async function saveWL(list){
   const body={message:'お気に入り更新(スマホから)',content:enc(JSON.stringify(list,null,1))};
@@ -137,6 +530,7 @@ async function addStock(){
     document.getElementById('newname').value='';
   }catch(e){alert('保存に失敗しました: '+e.message+'\n少し待ってからもう一度お試しください。');}
 }
+
 async function init(){
   if(!TOKEN){document.getElementById('setup').style.display='block';return;}
   try{
@@ -148,6 +542,7 @@ async function init(){
   document.getElementById('actions').href='https://github.com/'+OWNER+'/'+REPO+'/actions';
   document.getElementById('main').style.display='block';
   loadWL();
+  loadReport();
 }
 init();
 </script></body></html>
